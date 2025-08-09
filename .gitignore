@@ -3,3 +3,6 @@
 /terraform.tfstate.backup
 /.terraform/modules/modules.json
 /.terraform/modules/aws_vpc.aws_vpc/
+/bootstrap/terraform.tfstate.backup
+/bootstrap/terraform.tfstate
+/.terraform/terraform.tfstate
