@@ -5,10 +5,11 @@ provider "aws" {
 
 #Creating EC2 instance with key pair and security group
 resource "aws_instance" "practice_server" {
-    ami = "ami-084a7d336e816906b"
+    ami = "ami-0a7d80731ae1b2435"
     instance_type = var.env == "Staging" ? "t2.micro" : "t3.micro"
-    vpc_security_group_ids = [aws_security_group.sec-group.id]
+    vpc_security_group_ids = [aws_security_group.sec_group.id]
     subnet_id = module.aws_vpc.public_subnets_ids[0]
+    associate_public_ip_address = true
     key_name = "${var.keypair_name}"
     depends_on = [aws_s3_bucket.data_bucket]
     tags = {
@@ -18,12 +19,18 @@ resource "aws_instance" "practice_server" {
         }
 
 # Creating security group with 8080 open
-resource "aws_security_group" "sec-group" {
+resource "aws_security_group" "sec_group" {
     name = "${var.security_group}-${var.env}-sg"
     vpc_id = module.aws_vpc.vpc_id
     ingress {
         from_port = "8080"
         to_port = "8080"
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+        }
+        ingress {
+        from_port = "22"
+        to_port = "22"
         protocol = "tcp"
         cidr_blocks = ["0.0.0.0/0"]
         }
