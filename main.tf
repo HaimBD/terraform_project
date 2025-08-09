@@ -46,7 +46,7 @@ resource "aws_s3_bucket" "data_bucket" {
     }
 
 module "aws_vpc" {
-  source = ".\\modules\\vpc"
+  source = ".\\modules\\aws_vpc"
 
   vpc_name            = "${var.resource_alias}-vpc"
   vpc_cidr            = var.vpc_cidr
