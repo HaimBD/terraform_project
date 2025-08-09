@@ -3,6 +3,35 @@ provider "aws" {
   region = "us-east-1"
 }
 
+# Create EC2 instance for public subnet
+resource "aws_instance" "ec2_public" {
+    ami = "ami-0a7d80731ae1b2435"
+    instance_type = var.env == "Staging" ? "t2.micro" : "t3.micro"
+    vpc_security_group_ids = [aws_security_group.ec2_group.id]
+    subnet_id = module.aws_vpc.public_subnets_ids[0]
+    associate_public_ip_address = true
+    key_name = "${var.keypair_name}"
+    tags = {
+        Name = "ec2-public"
+        Environment = "${var.env}"
+        Terraform = "true"}
+        }
+
+# Create EC2 instance for private subnet
+resource "aws_instance" "ec2_private" {
+    ami = "ami-0a7d80731ae1b2435"
+    instance_type = var.env == "Staging" ? "t2.micro" : "t3.micro"
+    vpc_security_group_ids = [aws_security_group.ec2_group.id]
+    subnet_id = module.aws_vpc.private_subnets_ids[0]
+    associate_public_ip_address = false
+    key_name = "${var.keypair_name}"
+    tags = {
+        Name = "ec2-private"
+        Environment = "${var.env}"
+        Terraform = "true"}
+        }
+
+
 # Creating security group for ALB
 resource "aws_security_group" "alb_group" {
     name = "${var.security_group_alb}"
@@ -116,6 +145,8 @@ module "aws_vpc" {
 
   enable_nat_gateway  = true
   enable_vpn_gateway  = true
+  one_nat_gateway_per_az = true
+  single_nat_gateway   = false
 
 
   tags = {

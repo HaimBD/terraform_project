@@ -26,14 +26,23 @@ variable "vpc_public_subnets" {
 variable "enable_nat_gateway" {
   description = "Create NAT gateway(s)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "enable_vpn_gateway" {
   description = "Create VPN gateway"
   type        = bool
-  default     = false
+  default     = true
 }
+
+variable "one_nat_gateway_per_az"  {
+    type = bool
+    default = true
+    }
+variable "single_nat_gateway" {
+    type = bool
+    default = false
+    }
 
 variable "tags" {
   description = "Practice-vpc"
