@@ -40,3 +40,15 @@ variable "tags" {
   type        = map(string)
   default     = {Name: "hbd-vpc", Env: "Practice"}
 }
+
+variable "public_subnet_tags" {
+  description = "Map of tags for each public subnet"
+  type        = map(map(string))
+  default     = {}
+}
+
+variable "private_subnet_tags" {
+  description = "Map of tags for each private subnet"
+  type        = map(map(string))
+  default     = {}
+}

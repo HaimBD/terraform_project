@@ -14,4 +14,5 @@ module "aws_vpc" {
   enable_vpn_gateway = var.enable_vpn_gateway
 
   tags = var.tags
+
 }

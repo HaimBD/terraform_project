@@ -10,6 +10,21 @@ variable "security_group" {
     type = string
     default = "SG-WEB"
     }
+variable "security_group_alb" {
+    description = "Security group for test"
+    type = string
+    default = "SG-ALB"
+    }
+variable "security_group_ec2" {
+    description = "Security group for test"
+    type = string
+    default = "SG-ec2"
+    }
+variable "security_group_rds" {
+    description = "Security group for test"
+    type = string
+    default = "SG-rds"
+    }
 variable "keypair_name" {
     description  = "Keypair via terraform"
     type = string
@@ -37,5 +52,17 @@ variable "vpc_public_subnets" {
   type        = list(string)
   description = "Public subnets CIDRs"
   default     = ["10.0.3.0/24", "10.0.4.0/24"]
+}
+
+variable "public_subnet_tags" {
+  description = "Map of tags for each public subnet"
+  type        = map(map(string))
+  default     = {}
+}
+
+variable "private_subnet_tags" {
+  description = "Map of tags for each private subnet"
+  type        = map(map(string))
+  default     = {}
 }
 
