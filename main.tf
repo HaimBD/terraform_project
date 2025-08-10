@@ -150,7 +150,6 @@ module "aws_vpc" {
 
 
   tags = {
-    Name      = "${var.resource_alias}-vpc"
     Env       = var.env
     Terraform = "true"
   }

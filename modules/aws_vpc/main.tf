@@ -20,6 +20,8 @@ module "aws_vpc" {
   azs              = local.azs
   private_subnets  = var.vpc_private_subnets
   public_subnets   = var.vpc_public_subnets
+  public_subnet_names  = [for i in range(length(var.vpc_public_subnets))  : "public-subnet-${i + 1}"]
+  private_subnet_names = [for i in range(length(var.vpc_private_subnets)) : "private-subnet-${i + 1}"]
 
   enable_nat_gateway     = var.enable_nat_gateway
   one_nat_gateway_per_az = var.one_nat_gateway_per_az

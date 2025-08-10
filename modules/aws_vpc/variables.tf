@@ -47,7 +47,7 @@ variable "single_nat_gateway" {
 variable "tags" {
   description = "Practice-vpc"
   type        = map(string)
-  default     = {Name: "hbd-vpc", Env: "Practice"}
+  default     = {Env: "Practice"}
 }
 
 variable "public_subnet_tags" {
