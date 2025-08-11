@@ -3,19 +3,21 @@ provider "aws" {
   region = "us-east-1"
 }
 
+
+
 # Create EC2 instance for public subnet
-resource "aws_instance" "ec2_public" {
-    ami = "ami-0a7d80731ae1b2435"
-    instance_type = var.env == "Staging" ? "t2.micro" : "t3.micro"
-    vpc_security_group_ids = [aws_security_group.ec2_group.id]
-    subnet_id = module.aws_vpc.public_subnets_ids[0]
-    associate_public_ip_address = true
-    key_name = "${var.keypair_name}"
-    tags = {
-        Name = "ec2-public"
-        Environment = "${var.env}"
-        Terraform = "true"}
-        }
+# resource "aws_instance" "ec2_public" {
+#     ami = data.aws_ssm_parameter.al2.value
+#     instance_type = var.env == "Staging" ? "t2.micro" : "t3.micro"
+#     vpc_security_group_ids = [aws_security_group.ec2_group.id]
+#     subnet_id = module.aws_vpc.public_subnets_ids[0]
+#     associate_public_ip_address = true
+#     key_name = "${var.keypair_name}"
+#     tags = {
+#         Name = "ec2-public"
+#         Environment = "${var.env}"
+#         Terraform = "true"}
+#         }
 
 # Create EC2 instance for private subnet
 resource "aws_instance" "ec2_private" {
@@ -130,10 +132,7 @@ resource "aws_security_group_rule" "rds_from_ec2_mysql" {
 
 
 
-
-
-
-
+# Calling the VPC module
 module "aws_vpc" {
   source = ".\\modules\\aws_vpc"
 
@@ -155,3 +154,68 @@ module "aws_vpc" {
   }
 }
 
+
+# Calling the ALB module
+module "aws_alb" {
+  source = ".\\modules\\aws_alb"
+
+  name            = "${var.resource_alias}-alb"
+  vpc_id          = module.aws_vpc.vpc_id
+  subnets         = module.aws_vpc.public_subnets_ids
+  security_groups = [aws_security_group.alb_group.id]
+
+  app_port          = 80
+  health_check_path = "/"
+  certificate_arn   = ""                    # add ACM ARN to enable HTTPS + redirect
+  instance_id       = aws_instance.ec2_public.id
+
+  tags = {
+    Env       = var.env
+    Terraform = "true"
+  }
+}
+
+# Calling the ASG
+module "aws_asg" {
+  source  = "terraform-aws-modules/autoscaling/aws"
+  version = ">= 9.0.0"
+
+  name                = "hbd-asg"
+  min_size            = 1
+  max_size            = 3
+  desired_capacity    = 2
+  vpc_zone_identifier = module.aws_vpc.public_subnets_ids
+  health_check_type   = "ELB"
+
+  # Attach to your existing ALB Target Group (elbv2)
+  traffic_source_attachments = {
+    alb = {
+      traffic_source_identifier = module.aws_alb.app_target_group_arn
+      # traffic_source_type defaults to "elbv2"
+    }
+  }
+
+  # Launch template inputs the module uses to create the LT
+  image_id        = data.aws_ssm_parameter.al2.value
+  instance_type   = "t3.micro"
+  key_name        = var.keypair_name
+  security_groups = [aws_security_group.ec2_group.id]
+
+
+  user_data = base64encode(<<-EOT
+    #!/bin/bash
+    PKG="yum"; command -v dnf && PKG="dnf"
+    $PKG -y update
+    $PKG -y install nginx
+    systemctl enable nginx
+    systemctl start nginx
+    echo "<h1>Hello from $(hostname)</h1>" > /usr/share/nginx/html/index.html
+  EOT
+  )
+
+  tags = {
+  Name        = "${var.resource_alias}-web"
+  Environment = var.env
+  Terraform   = "true"
+}
+}
