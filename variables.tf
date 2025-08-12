@@ -66,3 +66,7 @@ variable "private_subnet_tags" {
   default     = {}
 }
 
+variable "target_group_targets" {
+  type    = map(any)
+  default = {}
+}

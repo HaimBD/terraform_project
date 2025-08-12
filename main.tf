@@ -62,18 +62,13 @@ resource "aws_security_group" "alb_group" {
 resource "aws_security_group" "ec2_group" {
     name = "${var.security_group_ec2}"
     vpc_id = module.aws_vpc.vpc_id
-#     ingress {
-#         from_port = "80"
-#         to_port = "80"
-#         protocol = "tcp"
-#         cidr_blocks = ["0.0.0.0/0"]
-#         }
-#         ingress {
-#         from_port = "443"
-#         to_port = "443"
-#         protocol = "tcp"
-#         cidr_blocks = ["0.0.0.0/0"]
-#         }
+    ingress {
+        from_port = "22"
+        to_port = "22"
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+        }
+
     egress {
         from_port = "0"
         to_port = "0"
@@ -101,6 +96,8 @@ resource "aws_security_group_rule" "ec2_from_alb_https" {
   to_port                  = "443"
   protocol                 = "tcp"
 }
+
+
 
 # Creating security group for RDS
 resource "aws_security_group" "rds_group" {
@@ -138,15 +135,8 @@ module "aws_vpc" {
 
   vpc_name            = "${var.resource_alias}-vpc"
   vpc_cidr            = var.vpc_cidr
-  availability_zones  = data.aws_availability_zones.available_azs.names
   vpc_private_subnets = var.vpc_private_subnets
   vpc_public_subnets  = var.vpc_public_subnets
-
-  enable_nat_gateway  = true
-  enable_vpn_gateway  = true
-  one_nat_gateway_per_az = true
-  single_nat_gateway   = false
-
 
   tags = {
     Env       = var.env
@@ -166,8 +156,7 @@ module "aws_alb" {
 
   app_port          = 80
   health_check_path = "/"
-  certificate_arn   = ""                    # add ACM ARN to enable HTTPS + redirect
-  instance_id       = aws_instance.ec2_public.id
+  certificate_arn   = "" # add ACM ARN to enable HTTPS + redirect
 
   tags = {
     Env       = var.env
@@ -175,47 +164,67 @@ module "aws_alb" {
   }
 }
 
+# Nginx user data
+locals {
+  nginx_user_data = <<-EOT
+    #!/bin/bash
+    sudo amazon-linux-extras install -y nginx1
+    sudo systemctl enable nginx
+    sudo systemctl start nginx
+  EOT
+}
+
+
 # Calling the ASG
 module "aws_asg" {
   source  = "terraform-aws-modules/autoscaling/aws"
   version = ">= 9.0.0"
 
-  name                = "hbd-asg"
+  name                = "${var.resource_alias}-web"
   min_size            = 1
-  max_size            = 3
-  desired_capacity    = 2
+  desired_capacity    = 1
+  max_size            = 2
   vpc_zone_identifier = module.aws_vpc.public_subnets_ids
   health_check_type   = "ELB"
 
-  # Attach to your existing ALB Target Group (elbv2)
+  # ASG attaches to the ALB TG
   traffic_source_attachments = {
-    alb = {
-      traffic_source_identifier = module.aws_alb.app_target_group_arn
-      # traffic_source_type defaults to "elbv2"
-    }
+    alb = { traffic_source_identifier = module.aws_alb.app_target_group_arn }
   }
 
-  # Launch template inputs the module uses to create the LT
+  # Launch template inputs
   image_id        = data.aws_ssm_parameter.al2.value
-  instance_type   = "t3.micro"
+  instance_type   = var.env == "Staging" ? "t2.micro" : "t3.micro"
   key_name        = var.keypair_name
   security_groups = [aws_security_group.ec2_group.id]
+  user_data       = base64encode(local.nginx_user_data)
 
+  # Roll instances automatically when LT changes (e.g., AMI or user_data)
+  instance_refresh = {
+    strategy = "Rolling"
+    preferences = {
+      min_healthy_percentage = 90
+    }
+    triggers = ["launch_template"]
+  }
 
-  user_data = base64encode(<<-EOT
-    #!/bin/bash
-    PKG="yum"; command -v dnf && PKG="dnf"
-    $PKG -y update
-    $PKG -y install nginx
-    systemctl enable nginx
-    systemctl start nginx
-    echo "<h1>Hello from $(hostname)</h1>" > /usr/share/nginx/html/index.html
-  EOT
-  )
-
+  # Resource-level tags (ASG/LT)
   tags = {
-  Name        = "${var.resource_alias}-web"
-  Environment = var.env
-  Terraform   = "true"
+    Env       = var.env
+    Terraform = "true"
+  }
+
+  # Ensure EC2 instances launched by ASG get these tags
+  tag_specifications = [{
+    resource_type = "instance"
+    tags = {
+      Name        = "${var.resource_alias}-web"
+      Environment = var.env
+      Terraform   = "true"
+    }
+  }]
 }
+
+output "alb_dns_name" {
+  value = module.aws_alb.alb_dns
 }

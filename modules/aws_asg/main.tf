@@ -1,49 +1,77 @@
-module "web_asg" {
-  source  = "terraform-aws-modules/autoscaling/aws"
-  version = "7.5.0"
-
-  name = "${var.resource_alias}-web"
-
-  # Instance config
-  min_size         = 1
-  desired_capacity = 1
-  max_size         = 2
-  health_check_type = "ELB"
-  vpc_zone_identifier = module.aws_vpc.public_subnets_ids
-
-  # Launch template inside module
-  launch_template_name = "${var.resource_alias}-web-lt"
-  launch_template_version = "$Latest"
-
-  image_id = data.aws_ssm_parameter.al2.value
-  instance_type = var.env == "Staging" ? "t2.micro" : "t3.micro"
-  key_name = var.keypair_name
-
-  security_groups = [aws_security_group.ec2_group.id]
-
-  user_data = base64encode(<<-EOT
+# Nginx user data (plain text; we’ll base64 it below)
+locals {
+  nginx_user_data = <<-EOT
     #!/bin/bash
-    yum -y update
-    yum -y install nginx
+    set -eux
+    PKG="yum"; command -v dnf && PKG="dnf"
+    $PKG -y update
+    $PKG -y install nginx
     systemctl enable nginx
     systemctl start nginx
-    echo "<h1>Hello from $(hostname)</h1>" > /usr/share/nginx/html/index.html
+    # simple 200 OK health page
+    echo "<h1>ok from $(hostname)</h1>" > /usr/share/nginx/html/index.html
   EOT
-  )
+}
 
-  # ALB Target group attachment
-  target_group_arns = [module.aws_alb.app_tg_arn]
+module "aws_asg" {
+  source  = "terraform-aws-modules/autoscaling/aws"
+  version = ">= 9.0.0"
 
-  tags = [
-    {
+  name                = "hbd-asg"
+  min_size            = 1
+  desired_capacity    = 2
+  max_size            = 3
+  vpc_zone_identifier = module.aws_vpc.public_subnets_ids
+  health_check_type   = "ELB"
 
-      value               = "${var.resource_alias}-web"
-      propagate_at_launch = true
-    },
-    {
-      key                 = "Environment"
-      value               = var.env
-      propagate_at_launch = true
+  # Attach to existing ALB Target Group (elbv2)
+  traffic_source_attachments = {
+    alb = {
+      traffic_source_identifier = module.aws_alb.app_target_group_arn
     }
-  ]
+  }
+
+  # Launch Template inputs
+  image_id      = data.aws_ssm_parameter.al2.value
+  instance_type = "t3.micro"
+  key_name      = var.keypair_name
+
+  # ✅ Force public IPs (and move SGs into the NI)
+  network_interfaces = [{
+    associate_public_ip_address = true
+    security_groups             = [aws_security_group.ec2_group.id]
+  }]
+
+  # Make sure new LT versions are used automatically
+  launch_template_name        = "hbd-asg-lt"
+  launch_template_description = "hbd ASG Launch Template"
+  update_default_version      = true
+
+  # Base64-encode user data for the Launch Template
+  user_data = base64encode(local.nginx_user_data)
+
+  # Roll instances when LT changes (e.g., AMI or user_data)
+  instance_refresh = {
+    strategy = "Rolling"
+    preferences = {
+      min_healthy_percentage = 90
+    }
+    triggers = ["launch_template"]
+  }
+
+  # Resource-level tags (ASG/LT)
+  tags = {
+    Env       = var.env
+    Terraform = "true"
+  }
+
+  # Ensure EC2 instances get these tags
+  tag_specifications = [{
+    resource_type = "instance"
+    tags = {
+      Name        = "${var.resource_alias}-web"
+      Environment = var.env
+      Terraform   = "true"
+    }
+  }]
 }

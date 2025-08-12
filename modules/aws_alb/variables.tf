@@ -1,7 +1,18 @@
-variable "name"            { type = string }                 # ALB name
-variable "vpc_id"          { type = string }
-variable "subnets"         { type = list(string) }           # public subnets
-variable "security_groups" { type = list(string) }
+variable "name" {
+  type = string
+}
+
+variable "vpc_id" {
+  type = string
+}
+
+variable "subnets" {
+  type = list(string)
+}
+
+variable "security_groups" {
+  type = list(string)
+}
 
 variable "app_port" {
   type    = number
@@ -13,15 +24,9 @@ variable "health_check_path" {
   default = "/"
 }
 
-# Leave empty for HTTP-only. If set, we add HTTPS and redirect HTTP->HTTPS.
 variable "certificate_arn" {
   type    = string
-  default = ""
-}
-
-# Single instance to register (you can expand this later)
-variable "instance_id" {
-  type = string
+  default = "" # leave empty for HTTP-only
 }
 
 variable "tags" {

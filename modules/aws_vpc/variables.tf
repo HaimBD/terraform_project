@@ -8,10 +8,7 @@ variable "vpc_cidr" {
   type        = string
 }
 
-variable "availability_zones" {
-  description = "AZ names (e.g., us-east-1a/b/c)"
-  type        = list(string)
-}
+
 
 variable "vpc_private_subnets" {
   description = "Private subnet CIDRs"
