@@ -171,6 +171,7 @@ locals {
     sudo amazon-linux-extras install -y nginx1
     sudo systemctl enable nginx
     sudo systemctl start nginx
+    sudo yum install -y mysql
   EOT
 }
 
@@ -227,4 +228,43 @@ module "aws_asg" {
 
 output "alb_dns_name" {
   value = module.aws_alb.alb_dns
+}
+
+module "rds" {
+  source = ".\\modules\\aws_rds"
+
+  identifier        = "${var.resource_alias}-mysql"
+  engine_version    = "8.0"
+  instance_class    = "db.t3.micro"
+  allocated_storage = 20
+  username          = "admin"
+  password = "Pa55w.rd"
+
+  # Exactly two private subnets (one per AZ)
+  subnet_ids = [
+    module.aws_vpc.private_subnets_ids[0],
+    module.aws_vpc.private_subnets_ids[1]
+  ]
+
+  # Your existing RDS SG that only allows from EC2 SG on 3306
+  vpc_security_group_ids = [
+    aws_security_group.rds_group.id
+  ]
+
+  publicly_accessible         = false
+  multi_az                    = true
+  storage_encrypted           = true
+  manage_master_user_password = false
+
+  backup_retention_period = 7
+  backup_window           = "04:00-05:00"
+  maintenance_window      = "sun:05:00-sun:06:00"
+  deletion_protection     = false
+  skip_final_snapshot     = true
+
+  tags = {
+    Name      = "${var.resource_alias}-mysql"
+    Env       = var.env
+    Terraform = "true"
+  }
 }

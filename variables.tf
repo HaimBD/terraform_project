@@ -70,3 +70,10 @@ variable "target_group_targets" {
   type    = map(any)
   default = {}
 }
+
+# variable "db_password" {
+#   description = "Master password for RDS (provide via tfvars or env)"
+#   type        = string
+#   sensitive   = true
+# }
+
